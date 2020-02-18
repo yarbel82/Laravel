@@ -7,7 +7,7 @@ COPY . /app
 RUN composer install
 RUN cp .env.example .env
 RUN echo "" >> .env
-RUN echo "JWT_SECRET=" >> .env
+RUN echo "JWT_SECRET=$(php artisan jwt:generate --show)" >> .env
 RUN php artisan key:generate
 RUN php artisan jwt:generate
 
