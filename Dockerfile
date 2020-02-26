@@ -8,9 +8,10 @@ RUN docker-php-ext-install \
     pdo_mysql
 
 WORKDIR /app
+COPY .env.example .env
 COPY . /app
 RUN composer install
-RUN cp .env.example .env
+
 RUN echo "" >> .env
 RUN echo "JWT_SECRET=$(php artisan jwt:generate --show)" >> .env
 RUN php artisan key:generate
