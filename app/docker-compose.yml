@@ -1,0 +1,144 @@
+version: "3"
+
+services:
+  api:
+    image: hub.t-me.pp.ua/workshop/laravel-realworld-api:feature-docker
+    restart: "always"
+    depends_on:
+      - ${DB_HOST:-mariadb}
+    networks:
+      - backend
+      - frontend
+    ports:
+      - "8181:8181"
+    labels:
+      - "traefik.backend=api"
+      - "traefik.frontend.rule=Host:api.${DOMAIN}"
+      - "traefik.docker.network=frontend"
+      - "traefik.port=8181"
+    environment:
+      DB_HOST: ${DB_HOST:-mariadb}
+      DB_DATABASE: ${DB_NAME}
+      DB_USERNAME: ${DB_USER}
+      DB_PASSWORD: ${DB_PASS}
+      APP_URL: http://api.${DOMAIN}
+      CORS_ALLOWED_ORIGINS: http://${DOMAIN}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  mariadb:
+    image: mariadb:10.3
+    command: bash -c "chown -R mysql:mysql /var/log/mysql && exec /docker-entrypoint.sh mysqld --log-error=/var/log/mysql/err.log --general-log=1 --general-log-file=/var/log/mysql/general-log.log --character-set-server=utf8 --collation-server=utf8_general_ci --max-allowed-packet=64MB"
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./mariadb:/var/lib/mysql
+      - ./logs/mysql:/var/log/mysql
+      #- ./db/bcp.sql:/docker-entrypoint-initdb.d/dump.sql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+    networks:
+      - backend
+    labels:
+      - "traefik.enable=false"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  vue:
+    image: hub.t-me.pp.ua/workshop/vue-realworld-example-app:feature-docker
+    command: sh -c "cd /usr/src/app/ && cat /dev/null > ./src/common/config.js && echo 'export const API_URL = \"http://api.${DOMAIN}:8181/api\";' >> ./src/common/config.js && echo 'export default API_URL;' >> ./src/common/config.js && yarn serve"
+    networks:
+      - backend
+      - frontend
+    ports:
+      - "80:8080"
+    labels:
+      - "traefik.backend=api"
+      - "traefik.frontend.rule=Host:${DOMAIN},www.${DOMAIN}"
+      - "traefik.docker.network=frontend"
+      - "traefik.port=80"
+      - "traefik.frontend.redirect.permanent=true"
+      - "traefik.frontend.redirect.regex=^https://www.${DOMAIN}/(.*)$$"
+      - "traefik.frontend.redirect.replacement=https://${DOMAIN}/$$1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # phpmyadmin:
+  #   image: phpmyadmin/phpmyadmin
+  #   links:
+  #     - mariadb:db
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: ${DB_ROOT}
+  #   networks:
+  #     - frontend
+  #     - backend
+  #   volumes:
+  #     - /sessions
+  #   labels:
+  #     - "traefik.backend=phpmadm"
+  #     - "traefik.frontend.rule=Host:madmin.${DOMAIN}"
+  #     - "traefik.docker.network=frontend"
+  #     - "traefik.port=80"
+  # backup:
+  #   image: hub.t-me.pp.ua/wi1w/docker-mysql-backup:latest
+  #   networks:
+  #     - backend
+  #   volumes:
+  #     - ./backups:/backup
+  #   environment:
+  #     DBS: ${MYSQL_DATABASE}
+  #     MYSQL_USERNAME: ${MYSQL_USER}
+  #     MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+  #     MYSQL_HOST: mariadb
+  #     RSYNC_COMMAND: "cp %DIR%/* /backup"
+  #     CRON_TIME: "0 0 * * *"
+  #     NOTIFICATION_SERVICE: slack
+  #     SLACK_HOOK_URL: "https://slack/hooks/wewerwertertertertertert"
+  #     SLACK_CHANNEL: "#updates"
+  #     SLACK_USERNAME: "mysql-backup"
+  #     SLACK_EMOJI: "package"
+  #   labels:
+  #     - "traefik.enable=false"
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "50m"
+  #       max-file: "3"
+  # logrotate:
+  #   image: blacklabelops/logrotate
+  #   networks:
+  #     - backend
+  #   volumes:
+  #     - ./logs:/var/log/docker
+  #   environment:
+  #     LOGS_DIRECTORIES: "/var/log/docker"
+  #     LOGROTATE_SIZE: 10M
+  #     LOGROTATE_CRONSCHEDULE: "* */1 * * *"
+  #     LOGROTATE_COMPRESSION: compress
+  #     LOGROTATE_MAXAGE: 60
+  #     LOGROTATE_MINSIZE: 10M
+  #   labels:
+  #     - "traefik.enable=false"
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "50m"
+  #       max-file: "3"
+
+networks:
+  frontend:
+    external: true
+  backend:
+    external: false
